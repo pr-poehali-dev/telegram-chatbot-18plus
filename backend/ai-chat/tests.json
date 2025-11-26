@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "name": "Send message to AI model",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "modelId": 1,
+        "message": "Привет!",
+        "intimacyLevel": 30,
+        "duoMode": "gentle"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "reply": "string",
+        "modelId": 1,
+        "intimacyLevel": 30
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Handle OPTIONS request",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    }
+  ]
+}

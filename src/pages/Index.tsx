@@ -9,6 +9,15 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Icon from '@/components/ui/icon';
 
+interface GalleryItem {
+  id: number;
+  type: 'photo' | 'video';
+  thumbnail: string;
+  isLocked: boolean;
+  requiredIntimacy: number;
+  title: string;
+}
+
 interface Model {
   id: number;
   name: string;
@@ -22,6 +31,7 @@ interface Model {
     gentle: string;
     bold: string;
   };
+  gallery: GalleryItem[];
 }
 
 interface Message {
@@ -44,7 +54,14 @@ const mockModels: Model[] = [
     duoMode: {
       gentle: 'Мягкая и заботливая',
       bold: 'Уверенная и доминирующая'
-    }
+    },
+    gallery: [
+      { id: 1, type: 'photo', thumbnail: '🌹', isLocked: false, requiredIntimacy: 0, title: 'Портрет' },
+      { id: 2, type: 'photo', thumbnail: '💃', isLocked: false, requiredIntimacy: 25, title: 'В платье' },
+      { id: 3, type: 'photo', thumbnail: '🔥', isLocked: true, requiredIntimacy: 50, title: 'Откровенное' },
+      { id: 4, type: 'video', thumbnail: '🎥', isLocked: true, requiredIntimacy: 75, title: 'Приватное видео' },
+      { id: 5, type: 'photo', thumbnail: '💋', isLocked: true, requiredIntimacy: 100, title: 'Эксклюзив 18+' }
+    ]
   },
   {
     id: 2,
@@ -58,7 +75,14 @@ const mockModels: Model[] = [
     duoMode: {
       gentle: 'Ласковая и нежная',
       bold: 'Провокационная и страстная'
-    }
+    },
+    gallery: [
+      { id: 6, type: 'photo', thumbnail: '✨', isLocked: false, requiredIntimacy: 0, title: 'Селфи' },
+      { id: 7, type: 'photo', thumbnail: '🌊', isLocked: false, requiredIntimacy: 25, title: 'На пляже' },
+      { id: 8, type: 'photo', thumbnail: '😈', isLocked: true, requiredIntimacy: 50, title: 'Соблазн' },
+      { id: 9, type: 'video', thumbnail: '📹', isLocked: true, requiredIntimacy: 75, title: 'Для тебя' },
+      { id: 10, type: 'photo', thumbnail: '🍑', isLocked: true, requiredIntimacy: 100, title: 'NSFW 18+' }
+    ]
   },
   {
     id: 3,
@@ -72,7 +96,14 @@ const mockModels: Model[] = [
     duoMode: {
       gentle: 'Романтичная и мечтательная',
       bold: 'Властная и чарующая'
-    }
+    },
+    gallery: [
+      { id: 11, type: 'photo', thumbnail: '👑', isLocked: true, requiredIntimacy: 0, title: 'Портрет' },
+      { id: 12, type: 'photo', thumbnail: '🥂', isLocked: true, requiredIntimacy: 25, title: 'Вечер' },
+      { id: 13, type: 'photo', thumbnail: '🌹', isLocked: true, requiredIntimacy: 50, title: 'Откровение' },
+      { id: 14, type: 'video', thumbnail: '🎬', isLocked: true, requiredIntimacy: 75, title: 'Приватное' },
+      { id: 15, type: 'photo', thumbnail: '💎', isLocked: true, requiredIntimacy: 100, title: 'VIP 18+' }
+    ]
   }
 ];
 
@@ -87,7 +118,7 @@ const Index = () => {
   const [showAgeVerification, setShowAgeVerification] = useState(true);
   const [activeDuoMode, setActiveDuoMode] = useState<'gentle' | 'bold'>('gentle');
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!inputMessage.trim() || !selectedModel) return;
 
     const newMessage: Message = {
@@ -98,10 +129,41 @@ const Index = () => {
     };
 
     setMessages([...messages, newMessage]);
+    const userMsg = inputMessage;
     setInputMessage('');
 
-    setTimeout(() => {
-      const responses = [
+    try {
+      const response = await fetch('https://functions.poehali.dev/5c7c81fb-053c-4d33-80e8-a1530cec536a', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          modelId: selectedModel.id,
+          message: userMsg,
+          intimacyLevel: selectedModel.intimacyLevel,
+          duoMode: activeDuoMode
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('AI service error');
+      }
+
+      const data = await response.json();
+      
+      const modelResponse: Message = {
+        id: messages.length + 2,
+        sender: 'model',
+        text: data.reply,
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, modelResponse]);
+      
+      if (selectedModel.intimacyLevel < 100) {
+        selectedModel.intimacyLevel = Math.min(selectedModel.intimacyLevel + 5, 100);
+      }
+    } catch (error) {
+      const fallbackResponses = [
         'Мне нравится, как ты выражаешь свои мысли 😊',
         'Расскажи мне больше о себе...',
         'Ты такой интересный собеседник 💖',
@@ -111,16 +173,12 @@ const Index = () => {
       const modelResponse: Message = {
         id: messages.length + 2,
         sender: 'model',
-        text: responses[Math.floor(Math.random() * responses.length)],
+        text: fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)],
         timestamp: new Date()
       };
 
       setMessages(prev => [...prev, modelResponse]);
-      
-      if (selectedModel.intimacyLevel < 100) {
-        selectedModel.intimacyLevel = Math.min(selectedModel.intimacyLevel + 5, 100);
-      }
-    }, 1000);
+    }
   };
 
   const handleVerifyAge = () => {
@@ -220,14 +278,18 @@ const Index = () => {
         </header>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="animate-slide-up">
-          <TabsList className="grid w-full grid-cols-4 mb-6 glass-effect h-14">
+          <TabsList className="grid w-full grid-cols-5 mb-6 glass-effect h-14">
             <TabsTrigger value="gallery" className="gap-2">
               <Icon name="Grid3x3" size={18} />
-              Галерея
+              Модели
             </TabsTrigger>
             <TabsTrigger value="chat" className="gap-2" disabled={!selectedModel}>
               <Icon name="MessageSquare" size={18} />
               Чат
+            </TabsTrigger>
+            <TabsTrigger value="content" className="gap-2" disabled={!selectedModel}>
+              <Icon name="Image" size={18} />
+              Контент
             </TabsTrigger>
             <TabsTrigger value="intimacy" className="gap-2">
               <Icon name="Heart" size={18} />
@@ -515,6 +577,101 @@ const Index = () => {
                 ))}
               </div>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="content" className="space-y-4">
+            {selectedModel && (
+              <Card className="p-6 glass-effect">
+                <div className="flex items-center gap-4 mb-6">
+                  <Avatar className="w-16 h-16">
+                    <AvatarFallback className="text-2xl gradient-primary text-white">
+                      {selectedModel.name[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <h2 className="text-2xl font-bold">{selectedModel.name}</h2>
+                    <p className="text-muted-foreground">Приватная галерея</p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setActiveTab('gallery')}
+                  >
+                    <Icon name="X" size={20} />
+                  </Button>
+                </div>
+
+                <div className="mb-6">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-sm text-muted-foreground">Уровень близости</span>
+                    <span className="font-bold text-primary">{selectedModel.intimacyLevel}%</span>
+                  </div>
+                  <Progress value={selectedModel.intimacyLevel} className="h-3" />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Повышай близость в чате, чтобы разблокировать больше контента
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {selectedModel.gallery.map((item) => {
+                    const isUnlocked = selectedModel.intimacyLevel >= item.requiredIntimacy && !selectedModel.isLocked;
+                    
+                    return (
+                      <Card 
+                        key={item.id} 
+                        className={`relative aspect-square overflow-hidden hover:scale-105 transition-all cursor-pointer ${
+                          isUnlocked ? 'glass-effect' : 'bg-muted'
+                        }`}
+                      >
+                        <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
+                          <div className="text-6xl mb-2">{item.thumbnail}</div>
+                          <p className="text-xs text-center font-semibold">{item.title}</p>
+                          
+                          {!isUnlocked && (
+                            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center">
+                              <Icon name="Lock" size={32} className="text-white mb-2" />
+                              <p className="text-white text-xs font-semibold">
+                                {selectedModel.isLocked 
+                                  ? 'Премиум' 
+                                  : `${item.requiredIntimacy}% близости`}
+                              </p>
+                            </div>
+                          )}
+                          
+                          {item.type === 'video' && isUnlocked && (
+                            <div className="absolute top-2 right-2">
+                              <Badge className="gradient-accent">
+                                <Icon name="Play" size={12} className="mr-1" />
+                                Видео
+                              </Badge>
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+
+                {selectedModel.isLocked && (
+                  <Card className="mt-6 p-6 bg-gradient-to-r from-primary/10 to-secondary/10 border-primary/20">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center">
+                        <Icon name="Crown" size={24} className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold mb-1">Разблокируй {selectedModel.name}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Получи доступ ко всей галерее и откровенным диалогам
+                        </p>
+                      </div>
+                      <Button className="gradient-primary">
+                        Открыть за 299₽
+                      </Button>
+                    </div>
+                  </Card>
+                )}
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="premium" className="space-y-6">
